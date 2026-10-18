@@ -9,7 +9,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/Infrathrone-Devops-Park/ztd-capstone
+    repoURL: https://github.com/JaiSandeep7461/Ecommerce-aks.git
     targetRevision: main
     path: deploy/helm/ztd-capstone
     helm:
