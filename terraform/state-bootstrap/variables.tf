@@ -1,5 +1,5 @@
 variable "subscription_id" {
-  description = "Azure subscription ID for the AzureDevops subscription"
+  description = "Azure subscription ID for the AzuerDevops subscription"
   type        = string
   default     = "cc9bc945-4e68-4631-a463-3bf91022981b"
 
