@@ -1,5 +1,5 @@
 # --- Stage 1: build the SPA ---
-FROM node:20 AS build
+FROM node:24 AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -10,8 +10,7 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:alpine
 
 USER root
-# Clear fixable Alpine OS-package CVEs (e.g. CVE-2026-33630 in c-ares) that
-# land in the base image over time — keeps the Trivy HIGH/CRITICAL gate green.
+# Upgrade available Alpine security fixes while building the runtime image.
 RUN apk update && apk upgrade --no-cache
 RUN rm -f /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
