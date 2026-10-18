@@ -1,4 +1,4 @@
-# Dev overrides — single replica, minimal resources, HPA/PDB off.
+# Dev overrides — single replica, low-traffic CPU requests, HPA/PDB off.
 image:
   tag: sha-960c1e2
 
@@ -14,9 +14,15 @@ metrics:
 networkPolicy:
   enabled: true
 
+# This cluster intentionally uses one small AKS node for the dev lab.
+# Keep the container CPU limits from values.yaml, but lower CPU requests so
+# all five workloads can be scheduled beside AKS system and Argo CD pods.
 services:
   catalog:
     replicas: 1
+    resources:
+      requests:
+        cpu: 10m
     hpa:
       enabled: false
     pdb:
@@ -24,6 +30,9 @@ services:
 
   orders:
     replicas: 1
+    resources:
+      requests:
+        cpu: 15m
     hpa:
       enabled: false
     pdb:
@@ -31,6 +40,9 @@ services:
 
   api-gateway:
     replicas: 1
+    resources:
+      requests:
+        cpu: 10m
     hpa:
       enabled: false
     pdb:
@@ -38,6 +50,9 @@ services:
 
   frontend:
     replicas: 1
+    resources:
+      requests:
+        cpu: 10m
     hpa:
       enabled: false
     pdb:
@@ -45,3 +60,6 @@ services:
 
 postgres:
   storage: 2Gi
+  resources:
+    requests:
+      cpu: 25m
