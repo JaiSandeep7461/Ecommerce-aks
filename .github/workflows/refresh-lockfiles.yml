@@ -17,12 +17,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
-      - name: Regenerate npm lockfiles with current compatible versions
+      - name: Regenerate npm lockfiles from package manifests
         run: |
           for service in api-gateway frontend; do
             cd "services/$service"
-            npm install --package-lock-only
-            npm update --package-lock-only
+            rm -f package-lock.json
+            npm install --package-lock-only --ignore-scripts
             cd "$GITHUB_WORKSPACE"
           done
       - uses: actions/setup-go@v6
