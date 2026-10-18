@@ -17,6 +17,8 @@ The bootstrap root uses local state because the storage account does not exist y
 ```bash
 cd terraform/state-bootstrap
 cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars and set storage_allowed_ip_rules to your current public
+# IPv4 address as a bare IP (no /32), e.g. ["198.51.100.20"] — replace the example.
 terraform init
 terraform fmt -recursive
 terraform validate
