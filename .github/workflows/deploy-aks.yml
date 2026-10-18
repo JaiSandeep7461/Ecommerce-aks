@@ -1,0 +1,124 @@
+name: deploy-aks
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-aks-main
+  cancel-in-progress: false
+
+jobs:
+  bootstrap-and-deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AKS_RESOURCE_GROUP: rg-zero-to-prod-dev
+      AKS_CLUSTER_NAME: ztd-aks-vqurc
+      ARGO_NAMESPACE: argocd
+    steps:
+      - name: Check out the latest GitOps configuration from main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Sign in to Azure using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.4
+
+      - name: Install Helm 3
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Install kubelogin
+        uses: azure/use-kubelogin@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          kubelogin-version: v0.2.21
+
+      - name: Connect to the existing AKS cluster
+        shell: bash
+        run: |
+          az aks get-credentials \
+            --resource-group "$AKS_RESOURCE_GROUP" \
+            --name "$AKS_CLUSTER_NAME" \
+            --overwrite-existing
+          kubelogin convert-kubeconfig -l azurecli
+          kubectl get nodes
+
+      - name: Ensure application namespaces and PostgreSQL secrets exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ns in dev staging prod; do
+            kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
+          done
+
+          # Create demo credentials only when missing. Existing credentials are preserved.
+          for ns in dev staging prod; do
+            if ! kubectl get secret ztd-capstone-postgres -n "$ns" >/dev/null 2>&1; then
+              pg_password="$(openssl rand -hex 24)"
+              kubectl create secret generic ztd-capstone-postgres -n "$ns" \
+                --from-literal="postgres-password=$pg_password" \
+                --from-literal="database-url=postgresql://ztd:$pg_password@postgres:5432/ztd"
+            fi
+          done
+
+      - name: Bootstrap or upgrade Argo CD in the existing cluster
+        shell: bash
+        run: |
+          set -euo pipefail
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update argo
+          helm upgrade --install argocd argo/argo-cd \
+            --namespace "$ARGO_NAMESPACE" \
+            --create-namespace \
+            --values deploy/argocd/argocd-values.yaml \
+            --wait \
+            --timeout 10m
+
+      - name: Register the GitOps root application
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=180s
+          kubectl apply -f deploy/argocd/root-app.yaml
+
+      - name: Wait for the dev application to sync and become healthy
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            sync_status="$(kubectl get application ztd-capstone-dev -n "$ARGO_NAMESPACE" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            health_status="$(kubectl get application ztd-capstone-dev -n "$ARGO_NAMESPACE" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+            echo "Attempt $attempt/60: sync=${sync_status:-Pending}, health=${health_status:-Pending}"
+
+            if [[ "$sync_status" == "Synced" && "$health_status" == "Healthy" ]]; then
+              kubectl get pods -n dev -o wide
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "The dev application did not become Synced and Healthy within 10 minutes." >&2
+          kubectl get applications -n "$ARGO_NAMESPACE" -o wide || true
+          kubectl get pods -n dev -o wide || true
+          kubectl describe application ztd-capstone-dev -n "$ARGO_NAMESPACE" || true
+          exit 1
