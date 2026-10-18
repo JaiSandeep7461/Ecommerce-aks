@@ -1,0 +1,33 @@
+name: temporary-terraform-format
+on:
+  push:
+    branches: [fix/repo-ci-security]
+    paths:
+      - 'terraform/**'
+permissions:
+  contents: write
+jobs:
+  fmt:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/repo-ci-security
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.16.6'
+      - name: Format Terraform files
+        run: terraform fmt -recursive
+      - name: Commit formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add terraform
+          if git diff --cached --quiet; then
+            echo "Terraform is already formatted"
+            exit 0
+          fi
+          git commit -m "style(terraform): format files with terraform fmt"
+          git push origin HEAD:fix/repo-ci-security
