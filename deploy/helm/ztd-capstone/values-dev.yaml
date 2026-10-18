@@ -5,6 +5,12 @@ image:
 ingress:
   host: dev.ztd-capstone.example.com
 
+# The observability stack is not installed in this low-cost dev setup.
+# Keep ServiceMonitor resources disabled until Prometheus Operator CRDs exist.
+metrics:
+  serviceMonitor:
+    enabled: false
+
 networkPolicy:
   enabled: true
 
