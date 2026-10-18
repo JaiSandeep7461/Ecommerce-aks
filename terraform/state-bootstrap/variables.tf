@@ -9,6 +9,24 @@ variable "subscription_id" {
   }
 }
 
+variable "storage_allowed_ip_rules" {
+  description = "Trusted public IPv4 addresses allowed to reach the Terraform state storage account (bare IPs, not CIDR)"
+  type        = list(string)
+
+  validation {
+    condition = length(var.storage_allowed_ip_rules) > 0 && alltrue([
+      for ip in var.storage_allowed_ip_rules :
+      can(cidrhost("${ip}/32", 0)) &&
+      !startswith(ip, "10.") &&
+      !startswith(ip, "192.168.") &&
+      !can(regex("^172\\.(1[6-9]|2[0-9]|3[01])\\.", ip)) &&
+      !startswith(ip, "127.") &&
+      !startswith(ip, "169.254.")
+    ])
+    error_message = "Provide at least one valid public IPv4 address (without /32). Private, loopback, and link-local addresses are not allowed."
+  }
+}
+
 variable "location" {
   description = "Azure region for the state resource group and storage account"
   type        = string
