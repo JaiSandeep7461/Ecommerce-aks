@@ -68,7 +68,10 @@ jobs:
         env:
           SERVICE: ${{ matrix.service }}
         run: |
-          docker run --rm -v "$PWD":/out aquasec/trivy:latest image --format spdx-json -o "/out/sbom-${SERVICE}.spdx.json" "local/${SERVICE}:scan"
+          trivy image \
+            --format spdx-json \
+            --output "sbom-${SERVICE}.spdx.json" \
+            "local/${SERVICE}:scan"
       - name: Cosign keyless sign image
         if: steps.exists.outputs.exists != 'true'
         env:
