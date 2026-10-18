@@ -6,7 +6,7 @@ This Terraform root provisions the Azure foundation: Resource Group, VNet/subnet
 
 - Azure subscription with permission to create resource groups, networking, AKS, ACR, role assignments, Log Analytics and AKS workloads.
 - Azure CLI logged in with `az login`; Terraform >= 1.7; kubectl, Helm, Docker and OpenSSL for add-on installation.
-- The Terraform examples are preconfigured for the `AzureDevops` subscription shown in your screenshot. Verify it with `az account show --output table`; if the subscription differs, update `subscription_id` in both `terraform.tfvars` files. You can also select it in the CLI with `az account set --subscription <SUBSCRIPTION_ID>`.
+- The Terraform examples default to the `AzuerDevops` subscription used for this lab. Verify it with `az account show --output table`; if the subscription differs, update `subscription_id` in both `terraform.tfvars` files. You can also select it in the CLI with `az account set --subscription <SUBSCRIPTION_ID>`.
 
 ## Deploy
 
@@ -46,7 +46,7 @@ cd ../..
 ./scripts/deploy-aks-addons.sh
 ```
 
-ACR uses the Basic tier to reduce development cost; choose Standard/Premium for production requirements. AKS and supporting resources incur charges while running. Review the plan and your subscription pricing before applying. The default configuration uses one `Standard_D2s_v5` node to reduce lab cost; the add-on script enables observability, which can still consume noticeable resources. Increase node count only if required. The optional SonarQube VM is disabled by default; enable it only if needed. For a cheaper infrastructure-only lab, skip the add-ons with `./scripts/deploy-aks-addons.sh --skip-observability --skip-argocd`.
+ACR uses the Basic tier to reduce development cost; choose Standard/Premium for production requirements. AKS and supporting resources incur charges while running. The defaults use one `Standard_D2s_v3` system node to fit the quota available during this lab. The add-on script enables observability, which can still consume noticeable resources. Increase node count only after checking regional quota and cost. The optional SonarQube VM is disabled by default; enable it only if needed. For a cheaper infrastructure-only lab, skip the add-ons with `./scripts/deploy-aks-addons.sh --skip-observability --skip-argocd`.
 
 ## Optional SonarQube VM
 
@@ -54,12 +54,12 @@ Set `deploy_sonarqube = true` in `terraform.tfvars` and change `sonarqube_ingres
 
 ## State and safety
 
-The main infrastructure root uses an Azure Storage backend with Microsoft Entra authentication and built-in blob lease locking. The state-bootstrap root uses local state only for the initial bootstrap cycle; back up that state file securely. Keep `backend.hcl`, `terraform.tfvars`, and state files out of Git. The Terraform root is not applied automatically by GitHub Actions.
+The main infrastructure root uses an Azure Storage backend with Microsoft Entra authentication and built-in blob lease locking. The state-bootstrap root uses local state only for the initial bootstrap cycle; back up that state file securely. Keep `backend.hcl`, `terraform.tfvars`, binary plan files, and state files out of Git. The Terraform root is not applied automatically by GitHub Actions.
 
 ## Deploy app with Argo CD
 
 1. Set the registry in `deploy/helm/ztd-capstone/values.yaml` to the `acr_login_server` output, or run the CI workflow once to write it from the `ACR_NAME` repository variable.
-2. Ensure the GitHub repo URL in `deploy/argocd/root-app.yaml` matches this repository.
+2. The Argo CD root and environment Applications in `deploy/argocd/` target this repository. Verify them before applying.
 3. After `./scripts/deploy-aks-addons.sh` installs Argo CD, use `kubectl -n argocd port-forward svc/argocd-server 8080:443` and open `https://localhost:8080`; retrieve the initial admin password from the `argocd-initial-admin-secret` Kubernetes Secret and rotate it immediately.
 4. Apply the root application: `kubectl apply -f deploy/argocd/root-app.yaml`.
 5. The dev Application syncs `deploy/helm/ztd-capstone` into the `dev` namespace. Ensure the image tag exists in ACR before sync.
