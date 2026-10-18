@@ -128,7 +128,7 @@ spec:
             {{- range $svc.writablePaths }}
             - name: {{ . | trimPrefix "/" | replace "/" "-" | replace "." "-" | lower | default "root" }}
               mountPath: {{ . }}
-          {{- end }}
+            {{- end }}
           {{- end }}
       {{- if $svc.writablePaths }}
       volumes:
