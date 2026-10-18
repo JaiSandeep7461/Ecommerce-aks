@@ -1,4 +1,7 @@
 # Dev overrides — single replica, low-traffic CPU requests, HPA/PDB off.
+# Recreate deletes the old pod before creating its replacement. This avoids
+# rolling-update surge pods that cannot fit on the single small dev node.
+deploymentStrategy: Recreate
 image:
   tag: sha-4f8904e
 
