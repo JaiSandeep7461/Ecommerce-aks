@@ -1,0 +1,64 @@
+# Trivy ignore policy — every entry here is a documented, deliberate risk
+# acceptance, NOT a blanket gate disable. The CI Trivy jobs
+# (pr-checks.yml fs scan + ci.yml per-image scan) still fail the build on any
+# HIGH/CRITICAL finding that is not explicitly listed below (in particular:
+# any FIXABLE finding that is not one of the two documented app-dependency
+# exceptions will break the build). Review this file whenever it is touched;
+# each entry must keep its justification current.
+#
+# What has been FIXED rather than ignored (so it is NOT in this list):
+#   * services/catalog — every Go module CVE was resolved by bumping
+#     go.opentelemetry.io/otel* to v1.43.0 and golang.org/x/net / grpc; the
+#     catalog image (distroless) scans completely clean.
+#   * services/frontend — nginx-unprivileged:alpine image scans clean.
+#   * fast-uri path-traversal (api-gateway) — pinned to 3.1.3 via an override.
+#   * All FIXABLE Debian OS CVEs in the api-gateway (node:20-slim) and orders
+#     (python:3.12-slim) images — cleared by `apt-get -y upgrade` in each
+#     Dockerfile's runtime stage.
+#   * The npm-CLI-bundled library CVEs (tar, minimatch, glob, cross-spawn,
+#     sigstore) in api-gateway — eliminated by removing the unused npm CLI
+#     from the runtime image (see services/api-gateway/Dockerfile).
+
+# --- services/api-gateway (our app node_modules) ---
+#
+# CVE-2026-44902 — @opentelemetry/auto-instrumentations-node /
+# @opentelemetry/sdk-node DoS via malformed HTTP request. Fixed only in the
+# @opentelemetry/core v2.x line, which requires bumping every
+# @opentelemetry/* package in this service in lockstep (v1 -> v2 is a
+# breaking API change for the tracing SDK we rely on). That migration needs
+# its own regression pass against api-gateway's tracing setup and is out of
+# scope for this CI-wiring change. Tracked as follow-up work.
+CVE-2026-44902
+
+# CVE-2026-25223 — fastify Content-Type validation bypass. Fixed only in
+# fastify v5 (major bump from the v4 this service is pinned to), which is a
+# breaking change to route/schema/hook APIs used throughout src/. Requires a
+# dedicated migration + regression pass, out of scope here. Tracked as
+# follow-up work.
+CVE-2026-25223
+
+# --- Debian base-image OS packages with NO upstream fix (Status: affected,
+#     FixedVersion: none) in api-gateway (node:20-slim, Debian 12) and orders
+#     (python:3.12-slim, Debian 13) ---
+#
+# These are packages baked into the official Debian base images (perl-base,
+# util-linux family, ncurses, gzip, zlib1g, libacl1) that Debian has not yet
+# released a security update for — `apt-get upgrade` in the Dockerfiles
+# already pulls in everything that IS fixed, so there is nothing to bump to.
+# None are reachable from these services' runtime code paths (the containers
+# run only `node dist/index.js` / `python -m app.main` as non-root; no shell,
+# perl, tar, or util-linux invocation at runtime). Re-run the image scan on
+# each base-image bump and drop entries here once Debian ships a fix.
+# EXPIRY: re-evaluate on the next base-image bump; remove any that gain a fix.
+CVE-2026-53615
+CVE-2026-41992
+CVE-2026-54369
+CVE-2025-69720
+CVE-2026-42496
+CVE-2026-42497
+CVE-2026-48962
+CVE-2026-8376
+CVE-2026-9538
+CVE-2023-45853
+
+# AWS-specific infrastructure exceptions were removed during Azure migration.

@@ -1,0 +1,35 @@
+name: terraform-azure
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'terraform/**'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  fmt-validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [azure, state-bootstrap]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+      - name: Terraform format
+        working-directory: terraform/${{ matrix.dir }}
+        run: terraform fmt -recursive
+      - name: Terraform init (validation only)
+        working-directory: terraform/${{ matrix.dir }}
+        run: terraform init -backend=false -input=false
+      - name: Terraform validate
+        working-directory: terraform/${{ matrix.dir }}
+        run: terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+      - name: TFLint
+        working-directory: terraform/${{ matrix.dir }}
+        run: |
+          tflint --init
+          tflint

@@ -1,0 +1,108 @@
+name: ci
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [frontend, api-gateway, orders, catalog]
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Azure login using Microsoft Entra federation (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Check whether image tag already exists in ACR
+        id: exists
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if az acr repository show-tags --name "$ACR_NAME" --repository "ztd-capstone/$SERVICE" --output tsv 2>/dev/null | grep -Fxq "$IMAGE_TAG"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build image
+        if: steps.exists.outputs.exists != 'true'
+        run: docker build -t "local/${{ matrix.service }}:scan" "services/${{ matrix.service }}"
+      - name: Trivy image scan (blocking on HIGH/CRITICAL)
+        if: steps.exists.outputs.exists != 'true'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: local/${{ matrix.service }}:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: 'false'
+          trivyignores: .trivyignore
+          format: table
+      - name: Login to Azure Container Registry
+        if: steps.exists.outputs.exists != 'true'
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+      - name: Tag and push to ACR
+        if: steps.exists.outputs.exists != 'true'
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          image="${ACR_NAME}.azurecr.io/ztd-capstone/${SERVICE}:${IMAGE_TAG}"
+          docker tag "local/${SERVICE}:scan" "$image"
+          docker push "$image"
+      - name: Install cosign
+        if: steps.exists.outputs.exists != 'true'
+        uses: sigstore/cosign-installer@v3
+      - name: Generate SBOM (SPDX)
+        if: steps.exists.outputs.exists != 'true'
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          docker run --rm -v "$PWD":/out aquasec/trivy:latest image --format spdx-json -o "/out/sbom-${SERVICE}.spdx.json" "local/${SERVICE}:scan"
+      - name: Cosign keyless sign image
+        if: steps.exists.outputs.exists != 'true'
+        env:
+          COSIGN_YES: 'true'
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          image="${ACR_NAME}.azurecr.io/ztd-capstone/${SERVICE}:${IMAGE_TAG}"
+          cosign sign --yes "$image"
+          cosign attest --yes --predicate "sbom-${SERVICE}.spdx.json" --type spdxjson "$image"
+  bump-image-tag:
+    needs: build-scan-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - id: tag
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Set ACR registry and bump image tag
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          sed -i "s#^  registry:.*#  registry: ${ACR_NAME}.azurecr.io#" deploy/helm/ztd-capstone/values.yaml
+          sed -i "0,/^  tag:/{s/^  tag:.*/  tag: ${IMAGE_TAG}/}" deploy/helm/ztd-capstone/values-dev.yaml
+      - name: Commit GitOps update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/helm/ztd-capstone/values.yaml deploy/helm/ztd-capstone/values-dev.yaml
+          if git diff --cached --quiet; then echo "No image change"; exit 0; fi
+          git commit -m "chore(gitops): deploy ${GITHUB_SHA::7} [skip ci]"
+          git push

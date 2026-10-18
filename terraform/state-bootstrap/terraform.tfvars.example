@@ -1,0 +1,5 @@
+subscription_id = "cc9bc945-4e68-4631-a463-3bf91022981b"
+location = "centralindia"
+resource_group_name = "rg-zero-to-prod-tfstate"
+# Optionally provide a unique 3-24 character lowercase alphanumeric storage account name.
+# storage_account_name = "stztdstate123456"

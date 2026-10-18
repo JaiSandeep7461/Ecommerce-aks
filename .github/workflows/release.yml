@@ -1,0 +1,52 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  resolve-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - id: tag
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+  deploy-staging:
+    needs: resolve-tag
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Promote immutable image tag to staging
+        env:
+          IMAGE_TAG: ${{ needs.resolve-tag.outputs.image_tag }}
+        run: |
+          sed -i "0,/^  tag:/{s/^  tag:.*/  tag: ${IMAGE_TAG}/}" deploy/helm/ztd-capstone/values-staging.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/helm/ztd-capstone/values-staging.yaml
+          if ! git diff --cached --quiet; then git commit -m "chore(gitops): promote ${IMAGE_TAG} to staging [skip ci]" && git push; fi
+  deploy-prod:
+    needs: [resolve-tag, deploy-staging]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Promote immutable image tag to production
+        env:
+          IMAGE_TAG: ${{ needs.resolve-tag.outputs.image_tag }}
+        run: |
+          sed -i "0,/^  tag:/{s/^  tag:.*/  tag: ${IMAGE_TAG}/}" deploy/helm/ztd-capstone/values-prod.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/helm/ztd-capstone/values-prod.yaml
+          if ! git diff --cached --quiet; then git commit -m "chore(gitops): promote ${IMAGE_TAG} to production [skip ci]" && git push; fi

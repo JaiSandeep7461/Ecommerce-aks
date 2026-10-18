@@ -1,0 +1,1226 @@
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Zero-trust default: deny all inbound traffic to every pod in the namespace
+# unless explicitly allowed by one of the per-service policies below.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-default-deny-ingress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress: []
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow ingress to api-gateway on 8080 from its declared peers.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-api-gateway-allow-ingress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: api-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: api-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        # Prometheus (kube-prometheus-stack) scrapes /metrics on the same
+        # port as app traffic — allow ingress from the observability
+        # namespace so the ServiceMonitor scrape isn't blocked by the
+        # default-deny policy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow egress from api-gateway: DNS resolution + declared peers (+ postgres).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-api-gateway-allow-egress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: api-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: api-gateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: catalog
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: orders
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8080
+    - to:
+        # OTLP export to the Phase 5 OpenTelemetry Collector in the
+        # observability namespace (traces/metrics), all services emit spans.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 4317
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow ingress to catalog on 8080 from its declared peers.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-catalog-allow-ingress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: catalog
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: catalog
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: api-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: orders
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        # Prometheus (kube-prometheus-stack) scrapes /metrics on the same
+        # port as app traffic — allow ingress from the observability
+        # namespace so the ServiceMonitor scrape isn't blocked by the
+        # default-deny policy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow egress from catalog: DNS resolution + declared peers (+ postgres).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-catalog-allow-egress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: catalog
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: catalog
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        # OTLP export to the Phase 5 OpenTelemetry Collector in the
+        # observability namespace (traces/metrics), all services emit spans.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 4317
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow ingress to frontend on 8080 from its declared peers.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-frontend-allow-ingress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        # Prometheus (kube-prometheus-stack) scrapes /metrics on the same
+        # port as app traffic — allow ingress from the observability
+        # namespace so the ServiceMonitor scrape isn't blocked by the
+        # default-deny policy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow egress from frontend: DNS resolution + declared peers (+ postgres).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-frontend-allow-egress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        # OTLP export to the Phase 5 OpenTelemetry Collector in the
+        # observability namespace (traces/metrics), all services emit spans.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 4317
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow ingress to orders on 8080 from its declared peers.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-orders-allow-ingress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: orders
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: orders
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        # Prometheus (kube-prometheus-stack) scrapes /metrics on the same
+        # port as app traffic — allow ingress from the observability
+        # namespace so the ServiceMonitor scrape isn't blocked by the
+        # default-deny policy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow egress from orders: DNS resolution + declared peers (+ postgres).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-orders-allow-egress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: orders
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: orders
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: catalog
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        # OTLP export to the Phase 5 OpenTelemetry Collector in the
+        # observability namespace (traces/metrics), all services emit spans.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 4317
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Allow ingress to postgres on 5432 only from services declaring
+# allowEgressToPostgres (orders). Without this the default-deny policy
+# (podSelector:{}) would also match the postgres pod and block the
+# orders -> postgres:5432 connection once policies are enforced.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-postgres-allow-ingress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ztd-capstone
+              app.kubernetes.io/instance: ztd-capstone
+              app.kubernetes.io/component: orders
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Source: ztd-capstone/templates/networkpolicy.yaml
+# Zero-trust egress for postgres: DNS resolution only (it initiates no
+# other outbound connections).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ztd-capstone-postgres-allow-egress
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# Source: ztd-capstone/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ztd-capstone-api-gateway
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: api-gateway
+automountServiceAccountToken: false
+---
+# Source: ztd-capstone/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ztd-capstone-catalog
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: catalog
+automountServiceAccountToken: false
+---
+# Source: ztd-capstone/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ztd-capstone-frontend
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: frontend
+automountServiceAccountToken: false
+---
+# Source: ztd-capstone/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ztd-capstone-orders
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: orders
+automountServiceAccountToken: false
+---
+# Source: ztd-capstone/templates/postgres-statefulset.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: postgres
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/component: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+---
+# Source: ztd-capstone/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: api-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/component: api-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Source: ztd-capstone/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: catalog
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/component: catalog
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Source: ztd-capstone/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/component: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Source: ztd-capstone/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: orders
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/component: orders
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Source: ztd-capstone/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ztd-capstone-api-gateway
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: api-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: api-gateway
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: ztd-capstone-0.1.0
+        app.kubernetes.io/name: ztd-capstone
+        app.kubernetes.io/instance: ztd-capstone
+        app.kubernetes.io/managed-by: Helm
+        project: ztd-capstone
+        app.kubernetes.io/component: api-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ztd-capstone-api-gateway
+      nodeSelector:
+        workload: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api-gateway
+          image: ztdacrvqurc.azurecr.io/ztd-capstone/api-gateway:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: CATALOG_URL
+              value: "http://catalog"
+            - name: ORDERS_URL
+              value: "http://orders"
+            - name: OTEL_SERVICE_NAME
+              value: "api-gateway"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://opentelemetry-collector.observability:4318"
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+# Source: ztd-capstone/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ztd-capstone-catalog
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: catalog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: catalog
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: ztd-capstone-0.1.0
+        app.kubernetes.io/name: ztd-capstone
+        app.kubernetes.io/instance: ztd-capstone
+        app.kubernetes.io/managed-by: Helm
+        project: ztd-capstone
+        app.kubernetes.io/component: catalog
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ztd-capstone-catalog
+      nodeSelector:
+        workload: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: catalog
+          image: ztdacrvqurc.azurecr.io/ztd-capstone/catalog:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "catalog"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://opentelemetry-collector.observability:4318"
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+# Source: ztd-capstone/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ztd-capstone-frontend
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: ztd-capstone-0.1.0
+        app.kubernetes.io/name: ztd-capstone
+        app.kubernetes.io/instance: ztd-capstone
+        app.kubernetes.io/managed-by: Helm
+        project: ztd-capstone
+        app.kubernetes.io/component: frontend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ztd-capstone-frontend
+      nodeSelector:
+        workload: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: frontend
+          image: ztdacrvqurc.azurecr.io/ztd-capstone/frontend:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: API_GATEWAY_URL
+              value: "http://api-gateway.$(POD_NAMESPACE).svc.cluster.local"
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: var-cache-nginx
+              mountPath: /var/cache/nginx
+            - name: var-run
+              mountPath: /var/run
+            - name: etc-nginx-conf-d
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: var-cache-nginx
+          emptyDir: {}
+        - name: var-run
+          emptyDir: {}
+        - name: etc-nginx-conf-d
+          emptyDir: {}
+---
+# Source: ztd-capstone/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ztd-capstone-orders
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: orders
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: orders
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: ztd-capstone-0.1.0
+        app.kubernetes.io/name: ztd-capstone
+        app.kubernetes.io/instance: ztd-capstone
+        app.kubernetes.io/managed-by: Helm
+        project: ztd-capstone
+        app.kubernetes.io/component: orders
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ztd-capstone-orders
+      nodeSelector:
+        workload: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      # Block startup until Postgres is reachable. The app opens its DB
+      # connection pool once at boot; without this gate a pod that starts
+      # before Postgres (or before its DNS record exists) skips schema init
+      # and never recovers, since liveness (/healthz) stays 200. This makes
+      # the ordering deterministic across (re)deploys and reschedules.
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres 5432; do
+                echo "waiting for postgres:5432..."; sleep 2;
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: orders
+          image: ztdacrvqurc.azurecr.io/ztd-capstone/orders:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: CATALOG_URL
+              value: "http://catalog"
+            - name: OTEL_SERVICE_NAME
+              value: "orders"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://opentelemetry-collector.observability:4318"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ztd-capstone-postgres
+                  key: database-url
+          resources:
+            limits:
+              cpu: 400m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+# Source: ztd-capstone/templates/postgres-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ztd-capstone-postgres
+  namespace: default
+  labels:
+    helm.sh/chart: ztd-capstone-0.1.0
+    app.kubernetes.io/name: ztd-capstone
+    app.kubernetes.io/instance: ztd-capstone
+    app.kubernetes.io/managed-by: Helm
+    project: ztd-capstone
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ztd-capstone
+      app.kubernetes.io/instance: ztd-capstone
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: ztd-capstone-0.1.0
+        app.kubernetes.io/name: ztd-capstone
+        app.kubernetes.io/instance: ztd-capstone
+        app.kubernetes.io/managed-by: Helm
+        project: ztd-capstone
+        app.kubernetes.io/component: postgres
+    spec:
+      nodeSelector:
+        workload: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: "postgres:16"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              value: "ztd"
+            - name: POSTGRES_USER
+              value: "ztd"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ztd-capstone-postgres
+                  key: postgres-password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - ztd
+                - -d
+                - ztd
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - ztd
+                - -d
+                - ztd
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          helm.sh/chart: ztd-capstone-0.1.0
+          app.kubernetes.io/name: ztd-capstone
+          app.kubernetes.io/instance: ztd-capstone
+          app.kubernetes.io/managed-by: Helm
+          project: ztd-capstone
+          app.kubernetes.io/component: postgres
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: managed-csi
+        resources:
+          requests:
+            storage: 5Gi
