@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 
-FROM --platform=linux/amd64 python:3.12-slim AS build
+# Pin the Python security release and Debian family. The explicit Bookworm
+# tag avoids stale Debian 13 system-Python package metadata from the moving
+# python:3.12-slim tag while staying on the Python 3.12 security branch.
+FROM --platform=linux/amd64 python:3.12.15-slim-bookworm AS build
 WORKDIR /src
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -9,18 +12,14 @@ COPY app ./app
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir .
 
-FROM --platform=linux/amd64 python:3.12-slim AS runtime
-# Pull in all available Debian security updates. The scanner currently reports
-# these Python packages from Debian's system site-packages as vulnerable; the
-# application runs from /opt/venv, so remove the unused distro copies rather
-# than leaving duplicate old metadata in the runtime image.
+FROM --platform=linux/amd64 python:3.12.15-slim-bookworm AS runtime
+# Pull in available Debian security updates. The application runs from its
+# isolated venv, so it does not need a distribution-wide Python package set.
 RUN apt-get update \
     && apt-get -y upgrade \
-    && apt-get -y purge python3-setuptools python3-urllib3 python3-msgpack \
     && apt-get -y --purge autoremove \
     && rm -rf /var/lib/apt/lists/*
-# The application runtime does not need pip's build tooling, but keeping the
-# remaining system pip current avoids shipping a known vulnerable installer.
+# Keep the runtime installer current; no application build step runs here.
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools
 RUN groupadd --system app && useradd --system --gid app --no-create-home app
 WORKDIR /app
