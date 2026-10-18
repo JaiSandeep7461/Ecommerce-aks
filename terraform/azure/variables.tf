@@ -33,6 +33,18 @@ variable "acr_name" {
   default     = ""
 }
 
+variable "api_server_authorized_ip_ranges" {
+  description = "Public IPv4 CIDRs permitted to reach the AKS API server, e.g. your current public IPv4 with /32"
+  type        = list(string)
+
+  validation {
+    condition = length(var.api_server_authorized_ip_ranges) > 0 && alltrue([
+      for cidr in var.api_server_authorized_ip_ranges : can(cidrhost(cidr, 0)) && cidr != "0.0.0.0/0"
+    ])
+    error_message = "Set at least one valid trusted IPv4 CIDR for the AKS API server; do not use 0.0.0.0/0."
+  }
+}
+
 variable "kubernetes_version" {
   description = "AKS Kubernetes version; null uses the region default"
   type        = string
