@@ -6,20 +6,22 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 COPY pyproject.toml ./
 COPY app ./app
-# Install current build tooling and the app into the isolated application venv.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir .
 
 FROM --platform=linux/amd64 python:3.12-slim AS runtime
-# Pull in all available Debian security updates.
+# Pull in all available Debian security updates. The scanner currently reports
+# these Python packages from Debian's system site-packages as vulnerable; the
+# application runs from /opt/venv, so remove the unused distro copies rather
+# than leaving duplicate old metadata in the runtime image.
 RUN apt-get update \
     && apt-get -y upgrade \
+    && apt-get -y purge python3-setuptools python3-urllib3 python3-msgpack \
     && apt-get -y --purge autoremove \
     && rm -rf /var/lib/apt/lists/*
-# Update system Python tooling and the vulnerable dependencies that may be
-# present in the base image's system site-packages, as Trivy scans both the
-# system Python install and the application virtualenv.
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools "urllib3>=2.8.0" "msgpack>=1.2.1"
+# The application runtime does not need pip's build tooling, but keeping the
+# remaining system pip current avoids shipping a known vulnerable installer.
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools
 RUN groupadd --system app && useradd --system --gid app --no-create-home app
 WORKDIR /app
 ENV PATH="/opt/venv/bin:$PATH" \
