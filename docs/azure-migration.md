@@ -1,43 +1,41 @@
 # AWS-to-Azure migration record
 
-The repository has been migrated from AWS/EKS-centric infrastructure to Azure/AKS. Application source code, Dockerfiles, Helm templates, and vendor-neutral observability components are retained where portable.
+This repository contains the Azure/AKS edition of the Zero to Prod e-commerce capstone. The workload code remains polyglot and mostly cloud-neutral; infrastructure, container publishing, and GitOps configuration target Azure.
 
-## Converted
+## Migration mapping
 
-- EKS → AKS, including Azure CNI Overlay networking, Azure RBAC, OIDC issuer, and Microsoft Entra Workload Identity support.
-- ECR → Azure Container Registry (ACR), with AKS kubelet `AcrPull` assignment and ACR admin access disabled.
-- AWS IAM role / GitHub OIDC setup → Microsoft Entra federated identity + `azure/login@v2` in GitHub Actions.
-- S3 + DynamoDB Terraform state → Azure Blob Storage backend (`terraform/state-bootstrap` creates the account/container; the `azurerm` backend uses Entra auth and blob-lease locking).
-- EKS nodegroup → AKS node pool; the EC2 SonarQube host → optional Azure Linux VM running SonarQube + PostgreSQL with an NSG CIDR allowlist. The VM is disabled by default to control cost; existing `SONAR_HOST_URL` and `SONAR_TOKEN` secrets point CI at the chosen instance.
-- AWS CLI image publishing script → Azure CLI + `az acr login` script.
-- ECR registry in Helm values → ACR placeholder, with CI workflow updating it from `ACR_NAME`.
-- AWS deployment workflows → Azure OIDC login and ACR image push; release workflow promotes existing image tags through GitOps value files.
-- Region/account/profile-specific AWS assumptions → Azure region/resource group variables.
-- AWS-specific Trivy ignore entries → removed; application CVE exceptions remain.
-- Argo CD repo URL → this `zero-to-prod` repository.
+- **EKS to AKS:** Terraform configures AKS, Azure CNI Overlay, Azure RBAC, OIDC issuer, and Microsoft Entra Workload Identity.
+- **ECR to ACR:** ACR admin access is disabled; the AKS kubelet identity receives `AcrPull`, and the GitHub Actions service principal receives `AcrPush` on the registry.
+- **AWS IAM/GitHub OIDC to Microsoft Entra federation:** `azure/login@v2` uses a federated credential; no long-lived Azure client secret is needed.
+- **S3/DynamoDB Terraform state to Azure Blob state:** `terraform/state-bootstrap` creates the storage account and container; the `azurerm` backend uses Entra authentication and blob-lease locking.
+- **EC2 SonarQube host to optional Azure VM:** the optional SonarQube VM is disabled by default and restricted by an NSG source CIDR.
+- **Image build and release:** `scripts/build-push-images.sh` publishes the service images to ACR; GitHub Actions scans, pushes, signs, and generates SBOM attestations; the release workflow updates staging/production Helm values.
+- **GitOps:** Argo CD root and environment Applications reference this repository: `JaiSandeep7461/Ecommerce-aks`.
+- **Kubernetes storage:** Helm values use AKS managed disks with the `managed-csi` StorageClass.
 
-## Main files changed
+## Main Azure-specific paths
 
-- Replaced `terraform/bootstrap/` and `terraform/stack/` with `terraform/state-bootstrap/` and `terraform/azure/` (Azure Blob state, AzureRM provider, AKS, ACR, Log Analytics, Azure networking, Entra RBAC/OIDC, outputs, optional SonarQube VM, and example variables).
-- Replaced `.github/workflows/ci.yml` with Azure OIDC login, ACR image push, Trivy scan, Cosign signing/SBOM attestation, and GitOps value updates.
-- Replaced `.github/workflows/release.yml` with GitOps tag promotion for staging and production.
-- Replaced `.github/workflows/terraform.yml` with Azure Terraform formatting/validation.
-- Replaced `scripts/build-push-images.sh` with Azure CLI/ACR commands; added `scripts/deploy-aks-addons.sh` for ingress, monitoring, Argo CD, and demo secrets after AKS exists.
-- Updated `deploy/helm/ztd-capstone/values.yaml` and observability PVC storage classes for AKS (`managed-csi`).
-- Updated `deploy/argocd/` repository URLs to `Infrathrone-Devops-Park/zero-to-prod`.
-- Replaced AWS-era design plans/specs and status reports with Azure deployment/design documents; retained the application source, Dockerfiles, tests, Helm templates, dashboards, and portable observability configs.
+- `terraform/state-bootstrap/` — initial Azure Blob state storage.
+- `terraform/azure/` — resource group, VNet/subnet, AKS, ACR, Log Analytics, identities, RBAC, and optional SonarQube VM.
+- `.github/workflows/ci.yml` — service tests, image build, Trivy scan, ACR push, SBOM, Cosign signing/attestation, and dev image-tag update.
+- `.github/workflows/pr-checks.yml` — service tests and filesystem/config security scan; SonarQube is optional and activated with the repository variable `ENABLE_SONAR=true` plus the `SONAR_TOKEN` and `SONAR_HOST_URL` secrets.
+- `.github/workflows/release.yml` — staging/production image-tag promotion in GitOps values.
+- `.github/workflows/terraform.yml` — formatting checks, validation, and TFLint.
+- `scripts/deploy-aks-addons.sh` — ingress-nginx, optional observability stack, optional Argo CD, and demo database secrets.
+- `deploy/helm/ztd-capstone/` — frontend, API gateway, orders, catalog, PostgreSQL demo database, network policies, probes, autoscaling, ServiceMonitors, and ingress.
+- `deploy/argocd/` — root and per-environment Argo CD Applications.
 
-## Important limitations / actions before production
+## Deployment and validation status
 
-- This is an infrastructure and delivery migration, not an executed cloud deployment. No Azure resources have been created from this archive, and no live Azure subscription credentials were available for end-to-end verification.
-- Review Terraform provider compatibility and run `terraform init`, `fmt`, `validate`, and `plan` in your Azure environment before applying. AKS cluster creation and Helm chart installation may take several minutes and incur cost.
-- Configure Azure Storage remote state before collaboration or CI-driven Terraform changes.
-- Create the Microsoft Entra federated credential and grant least-privilege `AcrPush` to the workflow principal.
-- Set `ACR_NAME` and Azure identity variables in GitHub repository settings.
-- If enabling SonarQube, set `deploy_sonarqube=true` and change `sonarqube_ingress_cidr` from its safe loopback default to a trusted source CIDR; port 22 is not opened. Confirm Helm values, ingress host/TLS, storage class, and observability resource requests for the actual AKS cluster. The PostgreSQL StatefulSet is still an in-cluster demo database; use Azure Database for PostgreSQL for production durability.
-- Obsolete AWS-specific implementation plans and reports were removed and replaced with `docs/specs/azure-aks-design.md`, `docs/plans/azure-deployment-plan.md`, and the Azure deployment guides. Use these Azure files as the current instructions.
+The Azure lab infrastructure and application have been created and the workloads were previously verified running on AKS. That manual deployment does not by itself prove the current CI pipeline or every new dependency update has passed. Treat the latest GitHub Actions results as the source of truth for pipeline validation. Before applying Terraform changes, run `terraform init`, `terraform fmt -check -recursive`, `terraform validate`, and review `terraform plan`; changes to existing AKS resources can cause replacement or downtime.
 
+Configure GitHub repository Variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, and `ACR_NAME`. Configure the Microsoft Entra federated credential for the repository's `main` branch and grant the workflow identity only the permissions it needs.
 
-### Subscription-specific Terraform settings
+For cost control, the development Terraform defaults to one `Standard_D2s_v3` AKS system node. Check regional vCPU quota and cost before scaling or enabling optional monitoring and SonarQube resources.
 
-The Azure Terraform roots (`terraform/azure` and `terraform/state-bootstrap`) default to the `AzureDevops` subscription ID supplied in the user's Azure Portal screenshot (`cc9bc945-4e68-4631-a463-3bf91022981b`). The example `terraform.tfvars` files include this ID explicitly. Verify the active account before running Terraform. The AKS system node count defaults to one to limit development-lab costs.
+## Security and production limitations
+
+- `.trivyignore` contains only explicitly documented Debian base-image findings for which Trivy reported no fixed version during the recorded scan. Recheck these exceptions whenever the base image or vulnerability database changes. Fixable application vulnerabilities must be upgraded rather than ignored.
+- Terraform state, backend configuration, variables, and generated plan files must not be committed. Use Azure Blob remote state for collaboration.
+- The in-cluster PostgreSQL StatefulSet is for lab/demo use. For production durability, use Azure Database for PostgreSQL, managed secrets, backups, ingress TLS, reviewed production approvals, and appropriate private networking.
+- The example ingress hosts use `example.com` placeholders and require DNS/TLS configuration before use as a production endpoint.
