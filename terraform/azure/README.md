@@ -19,6 +19,7 @@ cd terraform/state-bootstrap
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars and set storage_allowed_ip_rules to your current public
 # IPv4 address as a bare IP (no /32), e.g. ["198.51.100.20"] — replace the example.
+# Obtain that address with: curl -fsS https://api.ipify.org
 terraform init
 terraform fmt -recursive
 terraform validate
@@ -37,7 +38,13 @@ cp terraform.tfvars.example terraform.tfvars
 cp backend.hcl.example backend.hcl
 # Edit backend.hcl with the storage account name output by state-bootstrap.
 # Edit terraform.tfvars and set api_server_authorized_ip_ranges to your current
-# public IPv4 address in CIDR form, for example ["198.51.100.20/32"].
+# public IPv4 CIDR, for example ["198.51.100.20/32"] — replace the example.
+# Obtain your address with: curl -fsS https://api.ipify.org
+# When updating an existing AKS cluster, also include every existing cluster
+# outbound IP in this list so node-to-control-plane traffic remains authorized.
+# Discover outbound IP resource IDs with:
+# az aks show -g rg-zero-to-prod-dev -n ztd-aks-vqurc --query "networkProfile.loadBalancerProfile.effectiveOutboundIPs[].id" -o tsv
+# Resolve each returned ID with: az network public-ip show --ids <ID> --query ipAddress -o tsv
 terraform init -backend-config=backend.hcl
 terraform fmt -recursive
 terraform validate
