@@ -34,6 +34,8 @@ cd ../azure
 cp terraform.tfvars.example terraform.tfvars
 cp backend.hcl.example backend.hcl
 # Edit backend.hcl with the storage account name output by state-bootstrap.
+# Edit terraform.tfvars and set api_server_authorized_ip_ranges to your current
+# public IPv4 address in CIDR form, for example ["198.51.100.20/32"].
 terraform init -backend-config=backend.hcl
 terraform fmt -recursive
 terraform validate
@@ -46,7 +48,7 @@ cd ../..
 ./scripts/deploy-aks-addons.sh
 ```
 
-ACR uses the Basic tier to reduce development cost; choose Standard/Premium for production requirements. AKS and supporting resources incur charges while running. The defaults use one `Standard_D2s_v3` system node to fit the quota available during this lab. The add-on script enables observability, which can still consume noticeable resources. Increase node count only after checking regional quota and cost. The optional SonarQube VM is disabled by default; enable it only if needed. For a cheaper infrastructure-only lab, skip the add-ons with `./scripts/deploy-aks-addons.sh --skip-observability --skip-argocd`.
+ACR uses the Basic tier to reduce development cost; choose Standard/Premium for production requirements. AKS and supporting resources incur charges while running. The defaults use one `Standard_D2s_v3` system node to fit the quota available during this lab. The AKS API server is restricted to the CIDRs in `api_server_authorized_ip_ranges`; set these to your real trusted public IP before planning/applying. The add-on script enables observability, which can still consume noticeable resources. Increase node count only after checking regional quota and cost. The optional SonarQube VM is disabled by default; enable it only if needed. For a cheaper infrastructure-only lab, skip the add-ons with `./scripts/deploy-aks-addons.sh --skip-observability --skip-argocd`.
 
 ## Optional SonarQube VM
 
