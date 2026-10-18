@@ -2,7 +2,7 @@ subscription_id = "cc9bc945-4e68-4631-a463-3bf91022981b"
 location = "centralindia"
 resource_group_name = "rg-zero-to-prod-dev"
 system_node_count = 1
-system_node_vm_size = "Standard_D2s_v5"
+system_node_vm_size = "Standard_D2s_v3"
 pod_cidr = "192.168.0.0/16"
 # Optionally set a globally unique lowercase alphanumeric name (5-50 chars).
 # acr_name = "ztdcapstone12345"
