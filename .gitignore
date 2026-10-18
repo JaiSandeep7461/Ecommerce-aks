@@ -11,6 +11,8 @@
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+*.plan
+*.tfplan
 crash.log
 override.tf
 override.tf.json
@@ -39,6 +41,7 @@ terraform/azure/.terraform/
 terraform/azure/terraform.tfstate*
 terraform/azure/terraform.tfvars
 terraform/azure/*.tfplan
+terraform/azure/*.plan
 
 # Azure backend configuration (contains storage resource names)
 terraform/azure/backend.hcl
@@ -46,3 +49,4 @@ terraform/state-bootstrap/.terraform/
 terraform/state-bootstrap/terraform.tfstate*
 terraform/state-bootstrap/terraform.tfvars
 terraform/state-bootstrap/*.tfplan
+terraform/state-bootstrap/*.plan
