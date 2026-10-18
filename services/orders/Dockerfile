@@ -6,24 +6,20 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 COPY pyproject.toml ./
 COPY app ./app
-RUN pip install --no-cache-dir --upgrade pip && \
+# Install current build tooling and the app into the isolated application venv.
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir .
 
 FROM --platform=linux/amd64 python:3.12-slim AS runtime
-# Pull in all available Debian security updates so the runtime image does not
-# ship fixable OS-package CVEs (the Trivy image gate in ci.yml/pr-checks
-# blocks on HIGH/CRITICAL). Anything left after this is genuinely unfixable
-# (no upstream Debian patch yet) and is enumerated, with justification, in
-# the repo-root .trivyignore.
+# Pull in all available Debian security updates.
 RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get -y --purge autoremove \
     && rm -rf /var/lib/apt/lists/*
-# The base image ships a system pip in /usr/local/lib/python3.12/site-packages
-# (the app runs from /opt/venv and never invokes it at runtime, but Trivy
-# still scans it). Upgrade it to clear fixable pip CVEs so the image gate has
-# nothing fixable to flag.
-RUN python -m pip install --no-cache-dir --upgrade pip
+# Update system Python tooling and the vulnerable dependencies that may be
+# present in the base image's system site-packages, as Trivy scans both the
+# system Python install and the application virtualenv.
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools "urllib3>=2.8.0" "msgpack>=1.2.1"
 RUN groupadd --system app && useradd --system --gid app --no-create-home app
 WORKDIR /app
 ENV PATH="/opt/venv/bin:$PATH" \
