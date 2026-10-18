@@ -10,7 +10,7 @@ fullnameOverride: ""
 # Global image defaults. Per-service repo is set under services.<svc>.image.
 # -----------------------------------------------------------------------
 image:
-  registry: your-acr-name.azurecr.io
+  registry: ztdacrvqurc.azurecr.io
   tag: dev
   pullPolicy: IfNotPresent
 
