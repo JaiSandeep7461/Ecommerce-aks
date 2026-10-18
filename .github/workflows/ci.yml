@@ -2,25 +2,80 @@ name: ci
 on:
   push:
     branches: [main]
+
 permissions:
   contents: read
   id-token: write
+
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Test frontend
+        working-directory: services/frontend
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+      - name: Test API gateway
+        working-directory: services/api-gateway
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+          npm test
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.2'
+          cache-dependency-path: services/catalog/go.sum
+
+      - name: Test catalog
+        working-directory: services/catalog
+        run: |
+          go vet ./...
+          go build ./...
+          go test ./... -v
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Test orders
+        working-directory: services/orders
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          ruff check .
+          pytest -q
+
   build-scan-push:
+    needs: test
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service: [frontend, api-gateway, orders, catalog]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
       - id: tag
         run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Azure login using Microsoft Entra federation (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       - name: Check whether image tag already exists in ACR
         id: exists
         env:
@@ -33,11 +88,29 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      # A previous run may have pushed an image before a later SBOM/signing
+      # step failed. Reuse and re-scan that immutable image so retries still
+      # generate the SBOM and Cosign attestation.
+      - name: Pull existing image for verification
+        if: steps.exists.outputs.exists == 'true'
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          image="${ACR_NAME}.azurecr.io/ztd-capstone/${SERVICE}:${IMAGE_TAG}"
+          docker pull "$image"
+          docker tag "$image" "local/${SERVICE}:scan"
+
       - name: Build image
         if: steps.exists.outputs.exists != 'true'
         run: docker build -t "local/${{ matrix.service }}:scan" "services/${{ matrix.service }}"
+
       - name: Trivy image scan (blocking on HIGH/CRITICAL)
-        if: steps.exists.outputs.exists != 'true'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: local/${{ matrix.service }}:scan
@@ -47,9 +120,7 @@ jobs:
           ignore-unfixed: 'false'
           trivyignores: .trivyignore
           format: table
-      - name: Login to Azure Container Registry
-        if: steps.exists.outputs.exists != 'true'
-        run: az acr login --name "${{ vars.ACR_NAME }}"
+
       - name: Tag and push to ACR
         if: steps.exists.outputs.exists != 'true'
         env:
@@ -60,11 +131,11 @@ jobs:
           image="${ACR_NAME}.azurecr.io/ztd-capstone/${SERVICE}:${IMAGE_TAG}"
           docker tag "local/${SERVICE}:scan" "$image"
           docker push "$image"
+
       - name: Install cosign
-        if: steps.exists.outputs.exists != 'true'
         uses: sigstore/cosign-installer@v3
+
       - name: Generate SBOM (SPDX)
-        if: steps.exists.outputs.exists != 'true'
         env:
           SERVICE: ${{ matrix.service }}
         run: |
@@ -72,8 +143,8 @@ jobs:
             --format spdx-json \
             --output "sbom-${SERVICE}.spdx.json" \
             "local/${SERVICE}:scan"
-      - name: Cosign keyless sign image
-        if: steps.exists.outputs.exists != 'true'
+
+      - name: Cosign keyless sign image and attest SBOM
         env:
           COSIGN_YES: 'true'
           ACR_NAME: ${{ vars.ACR_NAME }}
@@ -83,17 +154,20 @@ jobs:
           image="${ACR_NAME}.azurecr.io/ztd-capstone/${SERVICE}:${IMAGE_TAG}"
           cosign sign --yes "$image"
           cosign attest --yes --predicate "sbom-${SERVICE}.spdx.json" --type spdxjson "$image"
+
   bump-image-tag:
     needs: build-scan-push
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
       - id: tag
         run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Set ACR registry and bump image tag
         env:
           ACR_NAME: ${{ vars.ACR_NAME }}
@@ -101,6 +175,7 @@ jobs:
         run: |
           sed -i "s#^  registry:.*#  registry: ${ACR_NAME}.azurecr.io#" deploy/helm/ztd-capstone/values.yaml
           sed -i "0,/^  tag:/{s/^  tag:.*/  tag: ${IMAGE_TAG}/}" deploy/helm/ztd-capstone/values-dev.yaml
+
       - name: Commit GitOps update
         run: |
           git config user.name "github-actions[bot]"
