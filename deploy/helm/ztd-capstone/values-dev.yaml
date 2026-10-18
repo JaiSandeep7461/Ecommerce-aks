@@ -3,7 +3,7 @@
 # rolling-update surge pods that cannot fit on the single small dev node.
 deploymentStrategy: Recreate
 image:
-  tag: sha-4f8904e
+  tag: sha-af46575
 
 ingress:
   host: dev.ztd-capstone.example.com
