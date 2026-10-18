@@ -4,7 +4,7 @@ import { trace } from '@opentelemetry/api';
 
 /**
  * logger is the shared structured JSON logger used for startup/shutdown
- * messages and per-request access logs. pino writes one JSON object per
+ * messages and per-request access logs. Pino writes one JSON object per
  * line to stdout by default, satisfying the logging contract.
  */
 export const logger = pino({
@@ -62,7 +62,7 @@ export function initTracing(): void {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { Resource } = require('@opentelemetry/resources');
+    const { resourceFromAttributes } = require('@opentelemetry/resources');
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { ATTR_SERVICE_NAME } = require('@opentelemetry/semantic-conventions');
 
@@ -74,7 +74,7 @@ export function initTracing(): void {
     });
 
     const sdk = new NodeSDK({
-      resource: new Resource({ [ATTR_SERVICE_NAME]: serviceName }),
+      resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: serviceName }),
       traceExporter: exporter,
       instrumentations: [getNodeAutoInstrumentations()],
     });

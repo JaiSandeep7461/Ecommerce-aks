@@ -1,3 +1,4 @@
+# Terraform backend-bootstrap provider configuration.
 terraform {
   required_version = ">= 1.7.0"
   required_providers {
@@ -13,8 +14,8 @@ terraform {
 }
 
 provider "azurerm" {
-  subscription_id     = var.subscription_id
-  features             {}
+  subscription_id = var.subscription_id
+  features {}
   storage_use_azuread = true
 }
 

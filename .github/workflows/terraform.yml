@@ -14,13 +14,13 @@ jobs:
       matrix:
         dir: [azure, state-bootstrap]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: '1.9.8'
-      - name: Terraform format
+          terraform_version: '1.16.6'
+      - name: Terraform format check
         working-directory: terraform/${{ matrix.dir }}
-        run: terraform fmt -recursive
+        run: terraform fmt -check -recursive
       - name: Terraform init (validation only)
         working-directory: terraform/${{ matrix.dir }}
         run: terraform init -backend=false -input=false

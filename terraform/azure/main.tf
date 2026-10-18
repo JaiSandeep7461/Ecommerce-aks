@@ -77,6 +77,11 @@ resource "azurerm_kubernetes_cluster" "platform" {
   kubernetes_version  = var.kubernetes_version
   sku_tier            = "Free"
 
+  # Restrict public Kubernetes API access to explicitly trusted source CIDRs.
+  api_server_access_profile {
+    authorized_ip_ranges = var.api_server_authorized_ip_ranges
+  }
+
   oidc_issuer_enabled               = true
   workload_identity_enabled         = true
   role_based_access_control_enabled = true
