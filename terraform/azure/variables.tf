@@ -1,5 +1,5 @@
 variable "subscription_id" {
-  description = "Azure subscription ID for the AzureDevops subscription"
+  description = "Azure subscription ID for the AzuerDevops subscription"
   type        = string
   default     = "cc9bc945-4e68-4631-a463-3bf91022981b"
 
@@ -43,13 +43,13 @@ variable "kubernetes_version" {
 variable "system_node_count" {
   description = "Initial system node count"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "system_node_vm_size" {
   description = "AKS system node VM SKU"
   type        = string
-  default     = "Standard_D2s_v5"
+  default     = "Standard_D2s_v3"
 }
 
 variable "vnet_address_space" {
