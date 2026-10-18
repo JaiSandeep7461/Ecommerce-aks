@@ -32,11 +32,11 @@ for ns in dev staging prod; do
 done
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
+# Do not create a ServiceMonitor until Prometheus Operator CRDs are installed.
+# This script permits --skip-observability, so the CRD may not exist.
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace \
   --set controller.service.type=LoadBalancer \
   --set controller.metrics.enabled=true \
-  # ServiceMonitor is disabled here because this script may skip observability,
-  # and the Prometheus Operator CRD is not installed yet.
   --set controller.metrics.serviceMonitor.enabled=false
 if [[ "$SKIP_OBS" != true ]]; then
   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
