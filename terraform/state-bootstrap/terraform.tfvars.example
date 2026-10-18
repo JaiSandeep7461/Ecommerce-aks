@@ -1,5 +1,8 @@
 subscription_id = "cc9bc945-4e68-4631-a463-3bf91022981b"
 location = "centralindia"
 resource_group_name = "rg-zero-to-prod-tfstate"
+# Required before plan/apply: add your public IPv4 address (no /32).
+# Example only; replace 203.0.113.10 with your public IP.
+# storage_allowed_ip_rules = ["203.0.113.10"]
 # Optionally provide a unique 3-24 character lowercase alphanumeric storage account name.
 # storage_account_name = "stztdstate123456"
