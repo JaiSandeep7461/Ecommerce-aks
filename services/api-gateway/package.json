@@ -2,7 +2,7 @@
   "name": "api-gateway",
   "version": "1.0.0",
   "private": true,
-  "description": "Edge API gateway proxying catalog and orders services",
+  "description": "Edge API gateway proxying catalog and orders services (Node.js 24 runtime)",
   "type": "commonjs",
   "main": "dist/index.js",
   "engines": {
