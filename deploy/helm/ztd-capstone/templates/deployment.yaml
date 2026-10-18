@@ -8,6 +8,10 @@ metadata:
     {{- include "ztd.serviceLabels" (dict "root" $ "service" $svcName) | nindent 4 }}
 spec:
   replicas: {{ $svc.replicas }}
+  strategy:
+    # Allow small single-node dev clusters to replace pods without a rolling
+    # surge that temporarily requires capacity for old and new pods together.
+    type: {{ $.Values.deploymentStrategy | default "RollingUpdate" }}
   selector:
     matchLabels:
       {{- include "ztd.serviceSelectorLabels" (dict "root" $ "service" $svcName) | nindent 6 }}
