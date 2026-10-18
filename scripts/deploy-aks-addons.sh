@@ -33,7 +33,11 @@ done
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace \
-  --set controller.service.type=LoadBalancer --set controller.metrics.enabled=true --set controller.metrics.serviceMonitor.enabled=true
+  --set controller.service.type=LoadBalancer \
+  --set controller.metrics.enabled=true \
+  # ServiceMonitor is disabled here because this script may skip observability,
+  # and the Prometheus Operator CRD is not installed yet.
+  --set controller.metrics.serviceMonitor.enabled=false
 if [[ "$SKIP_OBS" != true ]]; then
   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
   helm repo add grafana https://grafana.github.io/helm-charts
