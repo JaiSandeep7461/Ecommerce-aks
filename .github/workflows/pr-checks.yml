@@ -136,3 +136,25 @@ jobs:
           ignore-unfixed: 'false'
           trivyignores: .trivyignore
           format: table
+
+  
+  container-images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [frontend, api-gateway, orders, catalog]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build container image
+        run: docker build -t "local/${{ matrix.service }}:pr" "services/${{ matrix.service }}"
+      - name: Trivy image scan (blocking on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: local/${{ matrix.service }}:pr
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: 'false'
+          trivyignores: .trivyignore
+          format: table
