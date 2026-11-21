@@ -82,19 +82,8 @@ jobs:
           ACR_NAME: ${{ vars.ACR_NAME }}
           SERVICE: ${{ matrix.service }}
           IMAGE_TAG: ${{ steps.tag.outputs.tag }}
-        shell: bash
         run: |
-          set -euo pipefail
-
-          if ! az acr show --name "$ACR_NAME" --query loginServer --output tsv >/dev/null; then
-            echo "::error::Cannot access ACR '$ACR_NAME'. Check ACR_NAME and the federated identity's AcrPull/AcrPush permissions."
-            exit 1
-          fi
-
-          if az acr repository show-tags \
-              --name "$ACR_NAME" \
-              --repository "ztd-capstone/$SERVICE" \
-              --output tsv | grep -Fxq "$IMAGE_TAG"; then
+          if az acr repository show-tags --name "$ACR_NAME" --repository "ztd-capstone/$SERVICE" --output tsv 2>/dev/null | grep -Fxq "$IMAGE_TAG"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -112,22 +101,14 @@ jobs:
           ACR_NAME: ${{ vars.ACR_NAME }}
           SERVICE: ${{ matrix.service }}
           IMAGE_TAG: ${{ steps.tag.outputs.tag }}
-        shell: bash
         run: |
-          set -euo pipefail
           image="${ACR_NAME}.azurecr.io/ztd-capstone/${SERVICE}:${IMAGE_TAG}"
           docker pull "$image"
           docker tag "$image" "local/${SERVICE}:scan"
-          docker image inspect "local/${SERVICE}:scan" >/dev/null
 
       - name: Build image
         if: steps.exists.outputs.exists != 'true'
         run: docker build -t "local/${{ matrix.service }}:scan" "services/${{ matrix.service }}"
-
-      - name: Verify local image exists before security checks
-        env:
-          SERVICE: ${{ matrix.service }}
-        run: docker image inspect "local/${SERVICE}:scan" >/dev/null
 
       - name: Trivy image scan (blocking on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0

@@ -118,37 +118,7 @@ jobs:
           done
 
           echo "The dev application did not become Synced and Healthy within 10 minutes." >&2
-
-          echo "::group::Argo CD application summary"
           kubectl get applications -n "$ARGO_NAMESPACE" -o wide || true
-          kubectl describe application ztd-capstone-dev -n "$ARGO_NAMESPACE" || true
-          echo "::endgroup::"
-
-          echo "::group::Argo CD resource health details"
-          kubectl get application ztd-capstone-dev -n "$ARGO_NAMESPACE" -o json \
-            | jq -r '.status.resources[]? | [.kind, .namespace, .name, (.health.status // "Unknown"), (.health.message // "")] | @tsv' \
-            || true
-          echo "::endgroup::"
-
-          echo "::group::Dev workload status"
           kubectl get pods -n dev -o wide || true
-          kubectl get deployments,statefulsets,replicasets -n dev -o wide || true
-          echo "::endgroup::"
-
-          echo "::group::Dev pod diagnostics"
-          while IFS= read -r pod; do
-            [[ -z "$pod" ]] && continue
-            echo "--- kubectl describe pod/$pod -n dev ---"
-            kubectl describe pod "$pod" -n dev || true
-            echo "--- container statuses for pod/$pod ---"
-            kubectl get pod "$pod" -n dev -o json \
-              | jq -r '.status.containerStatuses[]? | [.name, (.ready|tostring), (.restartCount|tostring), (.state.waiting.reason // .state.terminated.reason // "running"), (.state.waiting.message // .state.terminated.message // "")] | @tsv' \
-              || true
-          done < <(kubectl get pods -n dev -o name | sed 's#pod/##')
-          echo "::endgroup::"
-
-          echo "::group::Recent warning events"
-          kubectl get events -n dev --field-selector type=Warning --sort-by=.lastTimestamp || true
-          kubectl get events -n "$ARGO_NAMESPACE" --field-selector type=Warning --sort-by=.lastTimestamp || true
-          echo "::endgroup::"
+          kubectl describe application ztd-capstone-dev -n "$ARGO_NAMESPACE" || true
           exit 1
